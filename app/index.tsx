@@ -1,149 +1,3 @@
-// import React, { useEffect, useRef } from "react";
-// import {
-//   Alert,
-//   PermissionsAndroid,
-//   Platform,
-//   StyleSheet
-// } from "react-native";
-// import { BleManager } from "react-native-ble-plx";
-// import { SafeAreaView } from "react-native-safe-area-context";
-// import { WebView } from "react-native-webview";
-
-// const manager = new BleManager();
-
-// export default function Index() {
-//   const webViewRef = useRef<WebView>(null);
-
-//   // This script keeps searching for the button until it finds it
-//   const injectJS = `
-//     (function() {
-//       console.log("Bridge Script Initialized");
-
-//       const checkInterval = setInterval(() => {
-//         const buttons = Array.from(document.querySelectorAll('button'));
-//         const connectBtn = buttons.find(btn => btn.innerText.trim().toUpperCase() === 'CONNECT');
-
-//         if (connectBtn && !connectBtn.getAttribute('data-bridge-active')) {
-//           console.log("Connect Button Found!");
-//           connectBtn.setAttribute('data-bridge-active', 'true');
-
-//           // Force our logic onto the button
-//           connectBtn.onclick = function(e) {
-//             e.preventDefault();
-//             e.stopPropagation();
-//             window.ReactNativeWebView.postMessage(JSON.stringify({ action: 'CONNECT_BLUETOOTH' }));
-//           };
-
-//           // Optional: Visual feedback so you know it worked
-//           connectBtn.style.border = "2px solid green";
-//         }
-//       }, 1000); // Check every 1 second
-
-//       window.onBluetoothUpdate = function(payload) {
-//         const statusLabel = document.querySelector('.printer-state-text');
-//         if (statusLabel) {
-//            statusLabel.innerText = payload.data;
-//            statusLabel.style.color = payload.data.includes('✅') ? 'green' : 'orange';
-//         }
-//       };
-//     })();
-//     true;
-//   `;
-
-//   const requestPermissions = async () => {
-//     if (Platform.OS === "android") {
-//       await PermissionsAndroid.requestMultiple([
-//         PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-//         PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-//         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-//       ]);
-//     }
-//   };
-
-//   useEffect(() => {
-//     requestPermissions();
-//   }, []);
-
-//   const startBluetoothProcess = async () => {
-//     const btState = await manager.state();
-//     if (btState !== "PoweredOn") {
-//       Alert.alert("Bluetooth Off", "Please turn on Bluetooth.");
-//       return;
-//     }
-
-//     sendToWeb({ type: "STATUS", data: "SCANNING..." });
-
-//     manager.startDeviceScan(null, null, (error, device) => {
-//       if (error) {
-//         console.log("Scan Error:", error);
-//         return;
-//       }
-
-//       // Check for your specific weighing machine name
-//       if (
-//         device?.name?.toLowerCase().includes("weigh") ||
-//         device?.name?.includes("SMART")
-//       ) {
-//         manager.stopDeviceScan();
-//         device
-//           .connect()
-//           .then((d) => d.discoverAllServicesAndCharacteristics())
-//           .then(() => {
-//             sendToWeb({ type: "STATUS", data: "CONNECTED ✅" });
-//             Alert.alert("Success", "Connected to " + device.name);
-//           })
-//           .catch((err) => {
-//             console.log("Conn Error:", err);
-//             sendToWeb({ type: "STATUS", data: "FAILED" });
-//           });
-//       }
-//     });
-//   };
-
-//   const sendToWeb = (payload: object) => {
-//     const jsCode = `if(window.onBluetoothUpdate) window.onBluetoothUpdate(${JSON.stringify(payload)}); true;`;
-//     webViewRef.current?.injectJavaScript(jsCode);
-//   };
-
-//   const onMessage = (event: any) => {
-//     try {
-//       const data = JSON.parse(event.nativeEvent.data);
-//       if (data.action === "CONNECT_BLUETOOTH") {
-//         startBluetoothProcess();
-//       }
-//     } catch (e) {
-//       console.log("Message Error:", e);
-//     }
-//   };
-
-//   return (
-//     <SafeAreaView style={styles.container}>
-//       <WebView
-//         ref={webViewRef}
-//         source={{ uri: "https://weighingmachine.netlify.app/login.html" }}
-//         style={styles.webview}
-//         javaScriptEnabled={true}
-//         domStorageEnabled={true}
-//         onLoadEnd={() => {
-//           webViewRef.current?.injectJavaScript(injectJS);
-//         }}
-//         onMessage={onMessage}
-//       />
-//     </SafeAreaView>
-//   );
-// }
-
-// const styles = StyleSheet.create({
-//   container: {
-//     flex: 1,
-//     backgroundColor: "#fff",
-//   },
-//   webview: {
-//     flex: 1,
-//     marginTop: Platform.OS === "android" ? 0 : 0, // Adjusted by SafeAreaView
-//   },
-// });
-
 import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -165,52 +19,63 @@ export default function Index() {
   const webRef = useRef<WebView>(null);
   const [devices, setDevices] = useState<any[]>([]);
   const [showList, setShowList] = useState(false);
-
-  let connectedDevice: any = null;
-
-  // const requestPermissions = async () => {
-  //   if (Platform.OS === "android") {
-  //     await PermissionsAndroid.requestMultiple([
-  //       PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-  //       PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-  //       PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-  //     ]);
-  //   }
-  // };
+  const [connectedDevice, setConnectedDevice] = useState<any>(null);
+  const [status, setStatus] = useState<string>("Idle");
 
   const requestPermissions = async () => {
     if (Platform.OS === "android") {
-      const granted = await PermissionsAndroid.requestMultiple([
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-      ]);
+      try {
+        const granted = await PermissionsAndroid.requestMultiple([
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        ]);
 
-      console.log("Permissions:", granted);
+        console.log("[BLE] Permissions:", granted);
 
-      if (
-        granted["android.permission.BLUETOOTH_SCAN"] !== "granted" ||
-        granted["android.permission.BLUETOOTH_CONNECT"] !== "granted" ||
-        granted["android.permission.ACCESS_FINE_LOCATION"] !== "granted"
-      ) {
-        Alert.alert(
-          "Permission required",
-          "Bluetooth permissions are required.",
-        );
+        if (
+          granted["android.permission.BLUETOOTH_SCAN"] !== "granted" ||
+          granted["android.permission.BLUETOOTH_CONNECT"] !== "granted" ||
+          granted["android.permission.ACCESS_FINE_LOCATION"] !== "granted"
+        ) {
+          Alert.alert(
+            "Permission required",
+            "Bluetooth permissions are required to scan devices.",
+          );
+          return false;
+        }
+        return true;
+      } catch (err) {
+        console.error("[BLE] Permission error:", err);
+        return false;
       }
     }
+    return true;
   };
 
   useEffect(() => {
     requestPermissions();
-  }, []);
+
+    return () => {
+      manager.stopDeviceScan();
+      if (connectedDevice) {
+        connectedDevice.cancelConnection();
+      }
+    };
+  }, [connectedDevice]);
 
   const startBluetoothProcess = async () => {
+    setStatus("Checking Bluetooth...");
     const state = await manager.state();
+    console.log("[BLE] Current state:", state);
 
     if (state !== "PoweredOn") {
-      manager.onStateChange((newState) => {
+      console.log("[BLE] Bluetooth is not powered on. Waiting...");
+      setStatus("Bluetooth off - turning on...");
+      const subscription = manager.onStateChange((newState) => {
+        console.log("[BLE] State changed to:", newState);
         if (newState === "PoweredOn") {
+          subscription?.remove();
           scanDevices();
         }
       }, true);
@@ -220,17 +85,6 @@ export default function Index() {
 
     scanDevices();
   };
-
-  // Send message to WebView
-  // const sendToWeb = (data: any) => {
-  //   const js = `
-  //     window.onBluetoothUpdate && window.onBluetoothUpdate(${JSON.stringify(
-  //       data
-  //     )});
-  //     true;
-  //   `;
-  //   webRef.current?.injectJavaScript(js);
-  // };
 
   const sendToWeb = (payload: any) => {
     let jsCode = "";
@@ -272,133 +126,128 @@ export default function Index() {
     webRef.current?.injectJavaScript(jsCode);
   };
 
-  // Scan Bluetooth
-  // const scanDevices = async () => {
-  //   const state = await manager.state();
-
-  //   if (state !== "PoweredOn") {
-  //     Alert.alert("Bluetooth is OFF");
-  //     return;
-  //   }
-
-  //   sendToWeb({ status: "SCANNING..." });
-
-  //   manager.startDeviceScan(null, null, (error, device) => {
-  //     if (error) {
-  //       console.log(error);
-  //       return;
-  //     }
-
-  //     if (device?.name) {
-  //       console.log("Device:", device.name);
-
-  //       if (
-  //         device.name.toLowerCase().includes("weigh") ||
-  //         device.name.toLowerCase().includes("scale")
-  //       ) {
-  //         manager.stopDeviceScan();
-  //         connectDevice(device);
-  //       }
-  //     }
-  //   });
-  // };  // please use this function if the error is come in the scaning the bluebooth OK.
-
   const scanDevices = async () => {
-    setDevices([]); // clear previous devices
+    console.log("[BLE] Starting device scan...");
+    setDevices([]);
     setShowList(true);
+    setStatus("Scanning...");
 
     manager.startDeviceScan(null, null, (error, device) => {
       if (error) {
-        console.log("Scan Error:", error);
+        console.error("[BLE] Scan Error:", error);
+        setStatus("Scan failed: " + error.message);
         return;
       }
 
+      if (!device) return;
+
       console.log(
-        "Device Found:",
+        "[BLE] Device Found:",
         device?.name || device?.localName || "Unknown",
+        "ID:",
         device?.id,
       );
 
-      if (!device) return;
-
       setDevices((prevDevices) => {
-        // avoid duplicate devices
         const exists = prevDevices.find((d) => d.id === device.id);
         if (exists) return prevDevices;
-
         return [...prevDevices, device];
       });
     });
 
-    // stop scanning after 10 seconds
+    // Stop scanning after 15 seconds
     setTimeout(() => {
       manager.stopDeviceScan();
-      console.log("Scan stopped");
-    }, 10000);
-    console.log("Device: ", devices);
+      console.log("[BLE] Scan stopped");
+      setStatus("Scan complete");
+    }, 15000);
   };
-
-  // Connect device
-  // const connectDevice = async (device: any) => {
-  //   try {
-  //     const connected = await device.connect();
-  //     await connected.discoverAllServicesAndCharacteristics();
-
-  //     connectedDevice = connected;
-
-  //     sendToWeb({
-  //       status: "CONNECTED",
-  //       device: connected.name,
-  //     });
-
-  //     Alert.alert("Connected", connected.name);
-
-  //     listenWeight(connected);
-  //   } catch (e) {
-  //     console.log("Connection error", e);
-  //     sendToWeb({ status: "FAILED" });
-  //   }
-  // }; please use this function if the error is come in the scaning the bluebooth OK
 
   const connectDevice = async (device: any) => {
     try {
+      console.log("[BLE] Connecting to device:", device.name || device.id);
+      setStatus("Connecting...");
+      manager.stopDeviceScan(); // Stop scanning first
+
       const connected = await device.connect();
+      console.log("[BLE] Device connected:", device.name);
+
       await connected.discoverAllServicesAndCharacteristics();
+      console.log("[BLE] Services discovered");
 
-      Alert.alert("Connected", device.name);
-
+      setConnectedDevice(connected);
+      sendToWeb({ status: "CONNECTED", device: device.name || device.id });
+      setStatus("✅ Connected - " + (device.name || device.id));
       setShowList(false);
+
+      // Start listening to weight data
+      await listenWeight(connected);
     } catch (err) {
-      console.log(err);
+      console.error("[BLE] Connection error:", err);
+      setStatus("❌ Connection failed");
     }
   };
 
   // Listen weight
   const listenWeight = async (device: any) => {
-    const services = await device.services();
+    try {
+      console.log("[BLE] Starting to listen for weight data...");
+      const services = await device.services();
+      console.log("[BLE] Found", services.length, "services");
 
-    for (const service of services) {
-      const characteristics = await service.characteristics();
+      let foundCharacteristic = false;
 
-      for (const char of characteristics) {
-        char.monitor((error: any, characteristic: any) => {
-          if (error) {
-            console.log(error);
-            return;
-          }
+      for (const service of services) {
+        console.log("[BLE] Service UUID:", service.uuid);
+        const characteristics = await service.characteristics();
+        console.log(
+          "[BLE] Service has",
+          characteristics.length,
+          "characteristics",
+        );
 
-          if (characteristic?.value) {
-            const weight = atob(characteristic.value);
+        for (const char of characteristics) {
+          console.log(
+            "[BLE] Characteristic UUID:",
+            char.uuid,
+            "Props:",
+            char.properties,
+          );
 
-            console.log("Weight:", weight);
+          // Try to monitor all readable characteristics
+          if (char.isReadable || char.isNotifiable || char.isIndicatable) {
+            foundCharacteristic = true;
+            console.log("[BLE] Monitoring characteristic:", char.uuid);
 
-            sendToWeb({
-              status: "WEIGHT",
-              value: weight,
+            char.monitor((error: any, characteristic: any) => {
+              if (error) {
+                console.error("[BLE] Monitor error:", error);
+                return;
+              }
+
+              if (characteristic?.value) {
+                try {
+                  const weight = atob(characteristic.value);
+                  console.log("[BLE] Weight received:", weight);
+
+                  sendToWeb({
+                    status: "WEIGHT",
+                    value: weight,
+                  });
+                } catch (e) {
+                  console.error("[BLE] Decode error:", e);
+                }
+              }
             });
           }
-        });
+        }
       }
+
+      if (!foundCharacteristic) {
+        console.warn("[BLE] No readable characteristics found");
+      }
+    } catch (err) {
+      console.error("[BLE] Listen weight error:", err);
     }
   };
 
@@ -414,66 +263,6 @@ export default function Index() {
       console.log(e);
     }
   };
-
-  // Inject script to website
-  // const injectedJS = `
-  // (function(){
-
-  //   console.log("Bridge Ready");
-
-  //   const interval = setInterval(()=>{
-
-  //     const btns = document.querySelectorAll("button");
-
-  //     btns.forEach(btn=>{
-
-  //       if(btn.innerText.trim().toUpperCase() === "CONNECT"){
-
-  //         btn.style.border="2px solid green";
-
-  //         btn.onclick = function(e){
-
-  //           e.preventDefault();
-
-  //           window.ReactNativeWebView.postMessage(
-  //             JSON.stringify({type:"CONNECT_BLUETOOTH"})
-  //           );
-
-  //         }
-
-  //       }
-
-  //     });
-
-  //   },1000);
-
-  //   window.onBluetoothUpdate = function(data){
-
-  //     console.log("Bluetooth Update",data);
-
-  //     const status = document.querySelector(".printer-state-text");
-
-  //     if(status){
-
-  //       status.innerText = data.status;
-
-  //     }
-
-  //     if(data.status==="WEIGHT"){
-
-  //       const weightBox = document.querySelector("#weight");
-
-  //       if(weightBox){
-  //         weightBox.innerText = data.value;
-  //       }
-
-  //     }
-
-  //   }
-
-  // })();
-  // true;
-  // `;
 
   const injectedJS = `
 (function() {
@@ -519,6 +308,24 @@ true;
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Status Bar */}
+      <View
+        style={{
+          backgroundColor: "#f0f0f0",
+          padding: 10,
+          borderBottomWidth: 1,
+        }}
+      >
+        <Text style={{ fontSize: 12, color: "#666" }}>
+          Status: {status} | Devices: {devices.length}
+        </Text>
+        {connectedDevice && (
+          <Text style={{ fontSize: 12, color: "green", marginTop: 5 }}>
+            ✓ Device Connected
+          </Text>
+        )}
+      </View>
+
       <WebView
         ref={webRef}
         source={{
@@ -530,7 +337,7 @@ true;
         injectedJavaScript={injectedJS}
         onMessage={onMessage}
       />
-      {showList && (
+      {/* {showList && (
         <SafeAreaView
           style={{
             position: "absolute",
@@ -551,28 +358,103 @@ true;
             }}
           >
             <Text style={{ fontSize: 18, fontWeight: "bold", padding: 10 }}>
-              Select Device
+              Select Device ({devices.length})
             </Text>
 
-            <FlatList
-              data={devices}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => connectDevice(item)}
-                  style={{
-                    padding: 15,
-                    borderBottomWidth: 1,
-                    borderColor: "#ddd",
-                  }}
-                >
-                  <Text style={{ fontWeight: "bold" }}>
-                    {item.name || item.localName || "Unknown Device"}
-                  </Text>
-                  <Text style={{ color: "gray", fontSize: 12 }}>{item.id}</Text>
-                </TouchableOpacity>
-              )}
-            />
+            {devices.length === 0 ? (
+              <Text style={{ padding: 15, color: "#999" }}>
+                Scanning... Make sure your device is powered on and in range.
+              </Text>
+            ) : (
+              <FlatList
+                data={devices}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => connectDevice(item)}
+                    style={{
+                      padding: 15,
+                      borderBottomWidth: 1,
+                      borderColor: "#ddd",
+                    }}
+                  >
+                    <Text style={{ fontWeight: "bold" }}>
+                      {item.name || item.localName || "Unknown Device"}
+                    </Text>
+                    <Text style={{ color: "gray", fontSize: 12 }}>
+                      {item.id}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        </SafeAreaView>
+      )} */}
+      {showList && (
+        <SafeAreaView
+          style={{
+            position: "absolute",
+            bottom: 0,
+            backgroundColor: "white",
+            width: "100%",
+            height: "60%",
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+          }}
+        >
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "white",
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+            }}
+          >
+            <View
+              style={{ padding: 10, borderBottomWidth: 1, borderColor: "#ddd" }}
+            >
+              <Text style={{ fontSize: 18, fontWeight: "bold" }}>
+                Select Device ({devices.length})
+              </Text>
+            </View>
+
+            {devices.length === 0 ? (
+              <View
+                style={{
+                  padding: 15,
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ color: "#999" }}>
+                  Scanning... Make sure your device is powered on and in range.
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={devices}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={true}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => connectDevice(item)}
+                    style={{
+                      padding: 15,
+                      borderBottomWidth: 1,
+                      borderColor: "#eee",
+                    }}
+                  >
+                    <Text style={{ fontWeight: "bold", fontSize: 16 }}>
+                      {item.name || item.localName || "Unknown Device"}
+                    </Text>
+                    <Text style={{ color: "gray", fontSize: 12, marginTop: 4 }}>
+                      {item.id}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
           </View>
         </SafeAreaView>
       )}
